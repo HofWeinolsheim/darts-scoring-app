@@ -1,42 +1,37 @@
 import os
-import sys
+from flask import Flask, send_from_directory, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
+from src.routes.api import api_bp
+from src.models.railway_database import db
 
 # Load environment variables
-load_dotenv()
+load_dotenv( )
 
-# DON'T CHANGE THIS !!!
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from flask import Flask, send_from_directory
-from flask_cors import CORS
-from src.routes.api import api_bp
-
-app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'darts_scorer_secret_key_2024')
-
-# Enable CORS for all routes
+app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
-# Register API blueprint
+# Set secret key
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
+
+# Register API routes
 app.register_blueprint(api_bp)
 
-@app.route('/', defaults={'path': ''})
+@app.route('/')
+def serve_index():
+    """Serve the main application"""
+    try:
+        return send_from_directory(app.static_folder, 'index.html')
+    except Exception as e:
+        return f"Error serving index.html: {str(e)}", 500
+
 @app.route('/<path:path>')
-def serve(path):
-    static_folder_path = app.static_folder
-    if static_folder_path is None:
-            return "Static folder not configured", 404
-
-    if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
-        return send_from_directory(static_folder_path, path)
-    else:
-        index_path = os.path.join(static_folder_path, 'index.html')
-        if os.path.exists(index_path):
-            return send_from_directory(static_folder_path, 'index.html')
-        else:
-            return "index.html not found", 404
-
+def serve_static(path):
+    """Serve static files"""
+    try:
+        return send_from_directory(app.static_folder, path)
+    except Exception as e:
+        return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
