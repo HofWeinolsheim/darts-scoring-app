@@ -13,40 +13,33 @@ class DartsDatabase:
     def connect(self):
         """Connect to Railway PostgreSQL database"""
         try:
-            # Railway provides DATABASE_URL automatically
-            database_url = os.getenv('DATABASE_URL')
-            
-            if database_url:
-                # Railway PostgreSQL connection
-                self.connection = psycopg2.connect(database_url)
-                self.connection.autocommit = True
-                print("Successfully connected to Railway PostgreSQL database")
-            else:
-                # Fallback for local development
-                self.connection = psycopg2.connect(
-                    host=os.getenv('DB_HOST', 'localhost'),
-                    port=int(os.getenv('DB_PORT', 5432)),
-                    database=os.getenv('DB_NAME', 'darts_scorer'),
-                    user=os.getenv('DB_USER', 'postgres'),
-                    password=os.getenv('DB_PASSWORD', 'password')
-                )
-                self.connection.autocommit = True
-                print("Successfully connected to PostgreSQL database")
+            # Use DATABASE_URL from Railway if available, otherwise fallback to hardcoded internal URL
+            database_url = os.getenv(
+                "DATABASE_URL",
+                "postgresql://postgres:xwoxXKKbBYKiKlJLhMJyWuccrWUmMDVa@postgres.railway.internal:5432/railway"
+            )
+
+            # psycopg2 requires postgresql:// prefix
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+            self.connection = psycopg2.connect(database_url)
+            self.connection.autocommit = True
+            print("✅ Successfully connected to Railway PostgreSQL database")
                 
         except Exception as e:
-            print(f"Error connecting to PostgreSQL: {e}")
+            print(f"❌ Error connecting to PostgreSQL: {e}")
             print("App will continue with limited functionality")
             self.connection = None
     
     def create_tables(self):
         """Create necessary tables if they don't exist"""
         if not self.connection:
-            print("No database connection - skipping table creation")
+            print("⚠️ No database connection - skipping table creation")
             return
         
         cursor = self.connection.cursor()
         
-        # Players table
         players_table = """
         CREATE TABLE IF NOT EXISTS players (
             id VARCHAR(36) PRIMARY KEY,
@@ -57,7 +50,6 @@ class DartsDatabase:
         )
         """
         
-        # Games table
         games_table = """
         CREATE TABLE IF NOT EXISTS games (
             id VARCHAR(36) PRIMARY KEY,
@@ -70,7 +62,6 @@ class DartsDatabase:
         )
         """
         
-        # Game participants table
         participants_table = """
         CREATE TABLE IF NOT EXISTS game_participants (
             id VARCHAR(36) PRIMARY KEY,
@@ -83,7 +74,6 @@ class DartsDatabase:
         )
         """
         
-        # Create indexes
         indexes = [
             "CREATE INDEX IF NOT EXISTS idx_games_winner ON games(winner_id)",
             "CREATE INDEX IF NOT EXISTS idx_participants_game ON game_participants(game_id)",
@@ -94,13 +84,11 @@ class DartsDatabase:
             cursor.execute(players_table)
             cursor.execute(games_table)
             cursor.execute(participants_table)
-            
             for index in indexes:
                 cursor.execute(index)
-                
-            print("Database tables created successfully")
+            print("✅ Database tables created successfully")
         except Exception as e:
-            print(f"Error creating tables: {e}")
+            print(f"❌ Error creating tables: {e}")
         finally:
             cursor.close()
     
@@ -126,7 +114,7 @@ class DartsDatabase:
             ))
             return True
         except Exception as e:
-            print(f"Error saving player: {e}")
+            print(f"❌ Error saving player: {e}")
             return False
         finally:
             cursor.close()
@@ -143,7 +131,7 @@ class DartsDatabase:
             cursor.execute(query)
             return cursor.fetchall()
         except Exception as e:
-            print(f"Error fetching players: {e}")
+            print(f"❌ Error fetching players: {e}")
             return []
         finally:
             cursor.close()
@@ -156,7 +144,6 @@ class DartsDatabase:
         cursor = self.connection.cursor()
         
         try:
-            # Insert game
             game_query = """
             INSERT INTO games (id, game_mode, tournament_mode, winner_id, rounds)
             VALUES (%s, %s, %s, %s, %s)
@@ -171,7 +158,6 @@ class DartsDatabase:
                 game_data['rounds']
             ))
             
-            # Insert participants
             participant_query = """
             INSERT INTO game_participants 
             (id, game_id, player_id, final_score, total_scored, rounds_played, average_score)
@@ -195,7 +181,7 @@ class DartsDatabase:
             
             return True
         except Exception as e:
-            print(f"Error saving game: {e}")
+            print(f"❌ Error saving game: {e}")
             return False
         finally:
             cursor.close()
@@ -208,7 +194,6 @@ class DartsDatabase:
         cursor = self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         try:
-            # Get basic stats
             stats_query = """
             SELECT 
                 COUNT(*) as total_games,
@@ -224,7 +209,6 @@ class DartsDatabase:
             cursor.execute(stats_query, (player_id, player_id))
             stats = cursor.fetchone()
             
-            # Get recent games
             recent_query = """
             SELECT g.game_mode, g.created_at, 
                    CASE WHEN g.winner_id = %s THEN 'Win' ELSE 'Loss' END as result,
@@ -244,7 +228,7 @@ class DartsDatabase:
                 'recent_games': [dict(game) for game in recent_games]
             }
         except Exception as e:
-            print(f"Error fetching player stats: {e}")
+            print(f"❌ Error fetching player stats: {e}")
             return {}
         finally:
             cursor.close()
@@ -276,7 +260,7 @@ class DartsDatabase:
             cursor.execute(query)
             return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Error fetching leaderboard: {e}")
+            print(f"❌ Error fetching leaderboard: {e}")
             return []
         finally:
             cursor.close()
